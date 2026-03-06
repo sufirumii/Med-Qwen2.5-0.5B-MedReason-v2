@@ -1,0 +1,102 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2868
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 import os\
+import torch\
+import gc\
+from unsloth import FastLanguageModel, get_chat_template\
+from trl import SFTTrainer\
+from transformers import TrainingArguments\
+from datasets import load_dataset\
+\
+# 1. GPU CLEANUP\
+def clear_gpu():\
+    torch.cuda.empty_cache()\
+    gc.collect()\
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0" # Use first T4\
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"\
+\
+clear_gpu()\
+\
+# --- 2. CONFIG ---\
+model_name = "unsloth/Qwen2.5-0.5B-Instruct-bnb-4bit"\
+max_seq_length = 2048 \
+dataset_path = "/kaggle/working/medical_glm_finetune.jsonl"\
+output_directory = "/kaggle/working/medical_qwen_model_v2"\
+\
+# --- 3. LOAD MODEL ---\
+model, tokenizer = FastLanguageModel.from_pretrained(\
+    model_name = model_name,\
+    max_seq_length = max_seq_length,\
+    load_in_4bit = True,\
+)\
+\
+model = FastLanguageModel.get_peft_model(\
+    model,\
+    r = 16, \
+    target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",\
+                      "gate_proj", "up_proj", "down_proj",],\
+    lora_alpha = 16,\
+    lora_dropout = 0, \
+    bias = "none",    \
+    use_gradient_checkpointing = "unsloth", \
+    random_state = 3407,\
+)\
+\
+# --- 4. DATASET PREP ---\
+dataset = load_dataset("json", data_files=dataset_path, split="train")\
+\
+tokenizer = get_chat_template(\
+    tokenizer,\
+    chat_template = "qwen-2.5",\
+    mapping = \{"role" : "role", "content" : "content", "user" : "user", "assistant" : "assistant"\},\
+)\
+\
+def formatting_prompts_func(examples):\
+    convos = examples["messages"]\
+    texts = [tokenizer.apply_chat_template(convo, tokenize = False, add_generation_prompt = False) for convo in convos]\
+    return \{ "text" : texts, \}\
+\
+dataset = dataset.map(formatting_prompts_func, batched = True)\
+\
+# --- 5. FIXED TRAINER ---\
+trainer = SFTTrainer(\
+    model = model,\
+    tokenizer = tokenizer,\
+    train_dataset = dataset,\
+    dataset_text_field = "text",\
+    max_seq_length = max_seq_length,\
+    dataset_num_proc = 2,\
+    packing = False, # Set to False for stability with this specific bug\
+    args = TrainingArguments(\
+        per_device_train_batch_size = 2, \
+        gradient_accumulation_steps = 8, \
+        warmup_steps = 5,\
+        max_steps = 1000, \
+        learning_rate = 2e-4,\
+        fp16 = not torch.cuda.is_bf16_supported(),\
+        bf16 = torch.cuda.is_bf16_supported(),\
+        logging_steps = 1,\
+        optim = "adamw_8bit",\
+        weight_decay = 0.01,\
+        lr_scheduler_type = "linear",\
+        seed = 3407,\
+        output_dir = "outputs",\
+        # CRITICAL FIX: Disables the behavior causing the 'int' object error\
+        average_tokens_across_devices = False, \
+        report_to = "none",\
+    ),\
+)\
+\
+# --- 6. EXECUTE ---\
+print("\uc0\u55356 \u57283  Starting Stage 2 Training (Fixed Bug Version)...")\
+trainer_stats = trainer.train()\
+\
+# Save final model\
+print(f"\uc0\u55357 \u56510  Saving merged 16-bit model to \{output_directory\}...")\
+model.save_pretrained_merged(output_directory, tokenizer, save_method = "merged_16bit")\
+print("\uc0\u10024  Done!")}
