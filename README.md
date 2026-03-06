@@ -72,7 +72,7 @@ The model was saved using `save_pretrained_merged` with `merged_16bit` — produ
 
 ## Dataset
 
-Training data was sourced from [OpenMed/Medical-Reasoning-SFT-GLM_4.5_Air](https://huggingface.co/datasets/OpenMed/Medical-Reasoning-SFT-Baichuan-M3-235B).
+Training data was sourced from [OpenMed/Medical-Reasoning-SFT-GLM_4.5_Air](https://huggingface.co/datasets/OpenMed/Medical-Reasoning-SFT-GLM_4.5_Air).
 
 | Property | Detail |
 |:---|:---|
