@@ -96,9 +96,9 @@ Training data was sourced from [OpenMed/Medical-Reasoning-SFT-Baichuan-M3-235B](
 
 ```
 Med-Qwen2.5-0.5B-MedReason-v2/
-├── dataset_prep.py          # Dataset download, transformation, and JSONL export
-├── train.py                 # Full LoRA fine-tuning script via Unsloth + SFTTrainer
-└── app.py                   # Gradio chat interface for local and shared inference
+├── Dataset Transformation Script          # Dataset download, transformation, and JSONL export
+├── Fine Tuning Script                 # Full LoRA fine-tuning script via Unsloth + SFTTrainer
+└── Gradio Interface                   # Gradio chat interface for local and shared inference
 ```
 
 ---
